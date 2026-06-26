@@ -1,0 +1,24 @@
+# RoMa / GPU extras  (for MATCH_METHOD=roma or hybrid)
+# ====================================================
+# The base requirements.txt already installs a default `torch`. For real GPU
+# speed you usually want a CUDA-matched torch build, then the romav2 package.
+#
+# 1) Install a CUDA-matched PyTorch (pick the line for your CUDA version).
+#    See https://pytorch.org/get-started/locally/ for the exact command.
+#
+#    # example, CUDA 12.1:
+#    # pip install torch --index-url https://download.pytorch.org/whl/cu121
+#
+# 2) Install RoMaV2 per its own instructions (it is not on PyPI as a simple
+#    wheel for all platforms). Typically:
+#
+#    # pip install git+https://github.com/Parskatt/RoMa.git
+#    # (or follow the RoMaV2 repo README)
+#
+# 3) Verify the GPU is visible to torch:
+#    python -c "import torch; print('cuda:', torch.cuda.is_available())"
+#
+# If torch.cuda.is_available() prints False, you installed the CPU-only torch;
+# reinstall the CUDA build from step 1.
+
+romav2
