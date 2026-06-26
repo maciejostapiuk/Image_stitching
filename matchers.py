@@ -31,14 +31,25 @@ import numpy as np
 # ---------------------------------------------------------------------------
 # Shared: build the result dict
 # ---------------------------------------------------------------------------
-def _make_result(conn, edge_strip, pts_a, shift, inlier_mask,
-                 good_min_inliers, good_min_ratio, debug_path):
+def _make_result(
+    conn,
+    edge_strip,
+    pts_a,
+    shift,
+    inlier_mask,
+    good_min_inliers,
+    good_min_ratio,
+    debug_path,
+):
     inlier_count = int(np.sum(inlier_mask))
     inlier_ratio = inlier_count / len(pts_a)
     dx, dy = float(shift[0]), float(shift[1])
     H = [[1.0, 0.0, dx], [0.0, 1.0, dy], [0.0, 0.0, 1.0]]
-    status = ("good" if inlier_count >= good_min_inliers
-              and inlier_ratio >= good_min_ratio else "suspicious")
+    status = (
+        "good"
+        if inlier_count >= good_min_inliers and inlier_ratio >= good_min_ratio
+        else "suspicious"
+    )
     return {
         "status": status,
         "label": conn["label"],
@@ -65,56 +76,87 @@ def match_sift(name, conn, edge_strip=None, debug_dir=None):
     img_a = read_gray(conn["a"]["file"])
     img_b = read_gray(conn["b"]["file"])
     if img_a is None or img_b is None:
-        return {"status": "failed", "reason": "could not load image",
-                "label": conn.get("label")}
+        return {
+            "status": "failed",
+            "reason": "could not load image",
+            "label": conn.get("label"),
+        }
 
     strip_a = crop_edge(img_a, conn["a"]["edge"], edge_strip)
     strip_b = crop_edge(img_b, conn["b"]["edge"], edge_strip)
 
     sift = cv2.SIFT_create()
     kp_a, des_a = sift.detectAndCompute(
-        np.ascontiguousarray(strip_a, dtype=np.uint8), None)
+        np.ascontiguousarray(strip_a, dtype=np.uint8), None
+    )
     kp_b, des_b = sift.detectAndCompute(
-        np.ascontiguousarray(strip_b, dtype=np.uint8), None)
+        np.ascontiguousarray(strip_b, dtype=np.uint8), None
+    )
     if des_a is None or des_b is None:
-        return {"status": "failed", "reason": "no descriptors",
-                "label": conn.get("label"),
-                "features_a": len(kp_a) if kp_a else 0,
-                "features_b": len(kp_b) if kp_b else 0}
+        return {
+            "status": "failed",
+            "reason": "no descriptors",
+            "label": conn.get("label"),
+            "features_a": len(kp_a) if kp_a else 0,
+            "features_b": len(kp_b) if kp_b else 0,
+        }
 
     des_a = np.asarray(des_a, dtype=np.float32)
     des_b = np.asarray(des_b, dtype=np.float32)
     knn = cv2.BFMatcher(cv2.NORM_L2).knnMatch(des_a, des_b, k=2)
-    matches = [m for m, n in (p for p in knn if len(p) == 2)
-               if m.distance < config.RATIO_TEST * n.distance]
+    matches = [
+        m
+        for m, n in (p for p in knn if len(p) == 2)
+        if m.distance < config.RATIO_TEST * n.distance
+    ]
     if len(matches) < 4:
-        return {"status": "failed", "reason": "too few matches",
-                "label": conn.get("label"),
-                "features_a": len(kp_a), "features_b": len(kp_b),
-                "matches": len(matches)}
+        return {
+            "status": "failed",
+            "reason": "too few matches",
+            "label": conn.get("label"),
+            "features_a": len(kp_a),
+            "features_b": len(kp_b),
+            "matches": len(matches),
+        }
 
     pts_a = np.float32([kp_a[m.queryIdx].pt for m in matches])
     pts_b = np.float32([kp_b[m.trainIdx].pt for m in matches])
     shift, inlier_mask = translation_ransac(pts_a, pts_b, config.RANSAC_THRESHOLD)
     if shift is None:
-        return {"status": "failed", "reason": "ransac failed",
-                "label": conn.get("label"),
-                "features_a": len(kp_a), "features_b": len(kp_b),
-                "matches": len(matches)}
+        return {
+            "status": "failed",
+            "reason": "ransac failed",
+            "label": conn.get("label"),
+            "features_a": len(kp_a),
+            "features_b": len(kp_b),
+            "matches": len(matches),
+        }
 
     debug_path = None
     if debug_dir is not None:
         inlier_matches = [m for m, keep in zip(matches, inlier_mask) if keep]
         vis = cv2.drawMatches(
-            strip_a, kp_a, strip_b, kp_b,
-            inlier_matches[:config.MAX_MATCHES_TO_DRAW], None,
-            flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+            strip_a,
+            kp_a,
+            strip_b,
+            kp_b,
+            inlier_matches[: config.MAX_MATCHES_TO_DRAW],
+            None,
+            flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
+        )
         debug_path = Path(debug_dir) / f"{name}.png"
         cv2.imwrite(str(debug_path), vis)
 
-    return _make_result(conn, edge_strip, pts_a, shift, inlier_mask,
-                        config.GOOD_MIN_INLIERS, config.GOOD_MIN_INLIER_RATIO,
-                        debug_path)
+    return _make_result(
+        conn,
+        edge_strip,
+        pts_a,
+        shift,
+        inlier_mask,
+        config.GOOD_MIN_INLIERS,
+        config.GOOD_MIN_INLIER_RATIO,
+        debug_path,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -130,6 +172,7 @@ def _load_roma():
         return _roma_model, _roma_device
     common.ensure_requirements({"torch": "torch"})
     import torch
+
     try:
         from romav2 import RoMaV2
     except ImportError as e:
@@ -138,7 +181,8 @@ def _load_roma():
             "package (and ideally a CUDA GPU). See requirements-roma.txt for "
             "install steps, or use MATCH_METHOD=sift (CPU, no extra deps)."
         ) from e
-    _roma_device = "cuda" if torch.cuda.is_available() else "cpu"
+    # _roma_device = "cuda" if torch.cuda.is_available() else "cpu"
+    _roma_device = "cpu"
     common.log(f"[roma] loading RoMaV2 on {_roma_device}...")
     _roma_model = RoMaV2().to(_roma_device)
     return _roma_model, _roma_device
@@ -147,18 +191,24 @@ def _load_roma():
 def match_roma(name, conn, edge_strip=None, debug_dir=None):
     edge_strip = edge_strip if edge_strip is not None else config.EDGE_STRIP
     import torch
+
     model, _ = _load_roma()
 
     img_a = read_color(conn["a"]["file"])
     img_b = read_color(conn["b"]["file"])
     if img_a is None or img_b is None:
-        return {"status": "failed", "reason": "could not load image",
-                "label": conn.get("label")}
+        return {
+            "status": "failed",
+            "reason": "could not load image",
+            "label": conn.get("label"),
+        }
 
-    strip_a = crop_edge(cv2.cvtColor(img_a, cv2.COLOR_BGR2RGB),
-                        conn["a"]["edge"], edge_strip)
-    strip_b = crop_edge(cv2.cvtColor(img_b, cv2.COLOR_BGR2RGB),
-                        conn["b"]["edge"], edge_strip)
+    strip_a = crop_edge(
+        cv2.cvtColor(img_a, cv2.COLOR_BGR2RGB), conn["a"]["edge"], edge_strip
+    )
+    strip_b = crop_edge(
+        cv2.cvtColor(img_b, cv2.COLOR_BGR2RGB), conn["b"]["edge"], edge_strip
+    )
     H_A, W_A = strip_a.shape[:2]
     H_B, W_B = strip_b.shape[:2]
 
@@ -170,13 +220,21 @@ def match_roma(name, conn, edge_strip=None, debug_dir=None):
     pts_b = kptsB.cpu().numpy()
 
     if len(pts_a) < 4:
-        return {"status": "failed", "reason": "too few matches",
-                "label": conn.get("label"), "matches": len(pts_a)}
+        return {
+            "status": "failed",
+            "reason": "too few matches",
+            "label": conn.get("label"),
+            "matches": len(pts_a),
+        }
 
     shift, inlier_mask = translation_ransac(pts_a, pts_b, config.RANSAC_THRESHOLD)
     if shift is None:
-        return {"status": "failed", "reason": "ransac failed",
-                "label": conn.get("label"), "matches": len(pts_a)}
+        return {
+            "status": "failed",
+            "reason": "ransac failed",
+            "label": conn.get("label"),
+            "matches": len(pts_a),
+        }
 
     debug_path = None
     if debug_dir is not None:
@@ -187,15 +245,27 @@ def match_roma(name, conn, edge_strip=None, debug_dir=None):
         cv_matches = [cv2.DMatch(i, i, 0) for i in range(len(pts_a))]
         inlier_matches = [m for m, keep in zip(cv_matches, inlier_mask) if keep]
         vis = cv2.drawMatches(
-            strip_a_bgr, cv_kp_a, strip_b_bgr, cv_kp_b,
-            inlier_matches[:config.MAX_MATCHES_TO_DRAW], None,
-            flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+            strip_a_bgr,
+            cv_kp_a,
+            strip_b_bgr,
+            cv_kp_b,
+            inlier_matches[: config.MAX_MATCHES_TO_DRAW],
+            None,
+            flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
+        )
         debug_path = Path(debug_dir) / f"{name}_roma.png"
         cv2.imwrite(str(debug_path), vis)
 
-    return _make_result(conn, edge_strip, pts_a, shift, inlier_mask,
-                        config.ROMA_GOOD_MIN_INLIERS,
-                        config.ROMA_GOOD_MIN_INLIER_RATIO, debug_path)
+    return _make_result(
+        conn,
+        edge_strip,
+        pts_a,
+        shift,
+        inlier_mask,
+        config.ROMA_GOOD_MIN_INLIERS,
+        config.ROMA_GOOD_MIN_INLIER_RATIO,
+        debug_path,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -207,8 +277,10 @@ def _sift_is_confident(result) -> bool:
         return False
     if "inliers" not in result or "inlier_ratio" not in result:
         return False
-    return (result["inliers"] >= config.HYBRID_SIFT_MIN_INLIERS
-            and result["inlier_ratio"] >= config.HYBRID_SIFT_MIN_INLIER_RATIO)
+    return (
+        result["inliers"] >= config.HYBRID_SIFT_MIN_INLIERS
+        and result["inlier_ratio"] >= config.HYBRID_SIFT_MIN_INLIER_RATIO
+    )
 
 
 def match_hybrid(name, conn, edge_strip=None, debug_dir=None):
@@ -230,7 +302,8 @@ def match_hybrid(name, conn, edge_strip=None, debug_dir=None):
     # SIFT wasn't confident -> try RoMa
     sift_reason = sift_res.get("reason") or (
         f"weak sift (inliers={sift_res.get('inliers')}, "
-        f"ratio={sift_res.get('inlier_ratio')})")
+        f"ratio={sift_res.get('inlier_ratio')})"
+    )
     roma_res = match_roma(name, conn, edge_strip=edge_strip, debug_dir=debug_dir)
 
     # If RoMa also failed, keep whichever has a usable shift; prefer SIFT's
@@ -263,4 +336,5 @@ def get_matcher(method: str):
         return match_hybrid
     raise ValueError(
         f"Unknown match method {method!r}. "
-        f"Choose one of: {sorted(config.VALID_MATCH_METHODS)}")
+        f"Choose one of: {sorted(config.VALID_MATCH_METHODS)}"
+    )

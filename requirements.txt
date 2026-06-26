@@ -21,7 +21,7 @@ scikit-image>=0.21      # SSIM (metrics stage)
 # systems is CPU-only. For CUDA (GPU) acceleration, install the matching CUDA
 # build instead — see requirements-roma.txt and the README. RoMa on CPU runs
 # but is very slow.
-torch>=2.0
+# torch>=2.0
 
 # --- stitching (stage 7) ---
 tifffile>=2023.7        # pyramidal OME-TIFF output

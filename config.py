@@ -99,7 +99,7 @@ def global_positions_optimized_path(metric: str) -> Path:
 TILE_REGEX = r"^(\d+)_(-?\d+)_(-?\d+)\.bmp$"
 
 # Width (in pixels) of the border strip cut from each tile edge for matching.
-EDGE_STRIP = 150
+EDGE_STRIP = 50
 
 # SIFT / RANSAC matching parameters
 RATIO_TEST = 0.75  # Lowe's ratio test threshold
@@ -124,7 +124,7 @@ VALID_MATCH_METHODS = {"sift", "roma", "hybrid"}
 
 # RoMa samples the whole strip uniformly, so many samples land off-overlap and
 # inlier_ratio is much lower than SIFT. These thresholds mirror the notebook.
-ROMA_SAMPLES = 2000  # points sampled from the dense warp
+ROMA_SAMPLES = 1000  # points sampled from the dense warp
 ROMA_GOOD_MIN_INLIERS = 15
 ROMA_GOOD_MIN_INLIER_RATIO = 0.1
 
@@ -141,7 +141,7 @@ HYBRID_SIFT_MIN_INLIER_RATIO = 0.6  # ...and at least this inlier ratio, else ->
 # ---------------------------------------------------------------------------
 PYRAMID_OME_TIFF_PATH = OUTPUT_DIR / "stitched_pyramid.ome.tif"
 PYRAMID_TILE_SIZE = 512  # internal tile size of the OME-TIFF
-PYRAMID_MIN_SIZE = 4096  # stop building pyramid levels below this size
+PYRAMID_MIN_SIZE = 2048  # stop building pyramid levels below this size
 PYRAMID_COMPRESSION = "deflate"  # "deflate" (lossless) or "jpeg" (smaller, lossy)
 
 # Stitch placement / canvas controls (mirror Gustaf's cell)

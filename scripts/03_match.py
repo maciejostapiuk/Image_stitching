@@ -39,6 +39,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import config
 import common
 from common import log, section, save_json, load_json
+import os
+
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 import matchers
 
@@ -51,13 +54,15 @@ def main() -> None:
     if method not in config.VALID_MATCH_METHODS:
         raise ValueError(
             f"Unknown MATCH_METHOD {method!r}. "
-            f"Choose one of: {sorted(config.VALID_MATCH_METHODS)}")
+            f"Choose one of: {sorted(config.VALID_MATCH_METHODS)}"
+        )
     log(f"Match method: {method}")
     log(f"Edge strip:   {config.EDGE_STRIP} px")
 
     if not config.GRAPH_PATH.exists():
         raise FileNotFoundError(
-            f"Missing {config.GRAPH_PATH}. Run 01_build_borders.py first.")
+            f"Missing {config.GRAPH_PATH}. Run 01_build_borders.py first."
+        )
 
     graph = load_json(config.GRAPH_PATH)
     log(f"Connections in graph: {len(graph)}")
@@ -67,17 +72,21 @@ def main() -> None:
 
     results = {}
     counts = {"good": 0, "suspicious": 0, "failed": 0}
-    method_counts = {}    # for hybrid: how many borders each backend handled
+    method_counts = {}  # for hybrid: how many borders each backend handled
     for name, conn in graph.items():
-        result = matcher(name, conn, edge_strip=config.EDGE_STRIP,
-                         debug_dir=config.DEBUG_DIR)
+        result = matcher(
+            name, conn, edge_strip=config.EDGE_STRIP, debug_dir=config.DEBUG_DIR
+        )
         results[name] = result
         st = result.get("status", "failed")
         counts[st] = counts.get(st, 0) + 1
         used = result.get("method", method)
         method_counts[used] = method_counts.get(used, 0) + 1
-        dxy = (f"dx={result['dx']:.1f} dy={result['dy']:.1f}"
-               if "dx" in result else f"({result.get('reason')})")
+        dxy = (
+            f"dx={result['dx']:.1f} dy={result['dy']:.1f}"
+            if "dx" in result
+            else f"({result.get('reason')})"
+        )
         via = f"  via {used}" if method == "hybrid" else ""
         log(f"  {name:24s} {st:11s} {dxy}{via}")
 

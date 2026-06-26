@@ -2,34 +2,17 @@
 """
 07_stitch.py
 ============
-STAGE 7: assemble the final mosaic from the matched transforms.
+STAGE 7: write the pyramidal OME-TIFF from an existing stitch_layout.json.
 
-Produces:
-    - a pyramidal OME-TIFF (memory-safe; multi-resolution, viewer-friendly)
-    - the stitch layout JSON (where every tile was placed)
+This stage does NOT rebuild the layout.
 
-The flat PNG output was removed: on large mosaics it duplicated the render
-work and slowed the stage down. The pyramidal OME-TIFF already contains a
-full-resolution level plus downsampled overviews and is the better deliverable.
-
-Placement uses the "good" connections (metadata-scaled BFS), then fills
-all-failed tiles from their neighbors' positions so no tile is dropped.
-
-Inputs
-------
-    output/stitch_graph.json
-    output/transforms_translation.json
-    the tile images
-
-Outputs
--------
-    output/stitched_pyramid.ome.tif
+Inputs:
     output/stitch_layout.json
+    tile images referenced inside stitch_layout.json
 
-Run
----
-    python scripts/07_stitch.py
-    PYRAMID_COMPRESSION=jpeg python scripts/07_stitch.py   # smaller, lossy
+Outputs:
+    output/stitched_pyramid.ome.tif
+    updated output/stitch_layout.json with final pyramid_info
 """
 
 from __future__ import annotations
@@ -41,77 +24,105 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import config
 import common
-from common import log, section, save_json, load_json, load_tiles, load_tiles_from_graph
+from common import log, section, save_json, load_json
 
 import stitcher
 
 
 def main() -> None:
-    section("STAGE 7  -  STITCH (pyramidal OME-TIFF)")
+    section("STAGE 7  -  STITCH FROM GLOBAL LAYOUT JSON")
     config.validate_dataset()
 
-    if not config.GRAPH_PATH.exists():
+    if not config.STITCH_LAYOUT_PATH.exists():
         raise FileNotFoundError(
-            f"Missing {config.GRAPH_PATH}. Run 01_build_borders.py first.")
-    if not config.TRANSFORMS_PATH.exists():
+            f"Missing {config.STITCH_LAYOUT_PATH}. "
+            f"Run scripts/06_global_layout.py first."
+        )
+
+    layout_data = load_json(config.STITCH_LAYOUT_PATH)
+
+    if "tiles" not in layout_data:
+        raise RuntimeError(
+            f"{config.STITCH_LAYOUT_PATH} does not contain a 'tiles' section."
+        )
+
+    layout = layout_data["tiles"]
+
+    log(f"Loaded layout: {config.STITCH_LAYOUT_PATH}")
+    log(f"Dataset in layout: {layout_data.get('dataset')}")
+    log(f"Tiles in layout: {len(layout)}")
+
+    missing = [
+        item["file"] for item in layout.values() if not Path(item["file"]).exists()
+    ]
+
+    if missing:
+        log(f"Missing tile files: {len(missing)}")
+        log(f"Example missing file: {missing[0]}")
         raise FileNotFoundError(
-            f"Missing {config.TRANSFORMS_PATH}. Run 03_match.py first.")
+            "Some tile image paths inside stitch_layout.json do not exist."
+        )
 
-    graph = load_json(config.GRAPH_PATH)
-    results = load_json(config.TRANSFORMS_PATH)
+    full_width, full_height = stitcher.layout_canvas_size(layout)
 
-    # tile list: prefer the real folder, fall back to the graph
-    try:
-        tiles = load_tiles(config.input_folder())
-    except FileNotFoundError:
-        tiles = []
-    if not tiles:
-        log("Input folder unavailable; reconstructing tiles from graph.")
-        tiles = load_tiles_from_graph(graph)
-    log(f"Tiles: {len(tiles)}  |  connections: {len(graph)}")
+    expected_levels = stitcher.compute_pyramid_levels(
+        full_width,
+        full_height,
+        min_size=config.PYRAMID_MIN_SIZE,
+    )
 
-    tile_shapes = stitcher.get_tile_shapes(tiles)
-    _summary, all_failed, no_conn = stitcher.summarize_statuses(
-        tiles, graph, results)
-    log(f"All-failed tiles: {len(all_failed)}  |  no-connection: {len(no_conn)}")
+    log(f"Canvas:           {full_width} x {full_height}")
+    log(f"Pyramid min size: {config.PYRAMID_MIN_SIZE}")
+    log(f"Expected levels:  {len(expected_levels)}")
 
-    log("\nBuilding layout from good connections...")
-    layout, sx, sy = stitcher.build_stitch_layout(tiles, results, tile_shapes)
-    log(f"  metadata scale: x={sx:.4f} y={sy:.4f}")
+    for level in expected_levels:
+        log(
+            f"  level {level['level']}: "
+            f"{level['width']} x {level['height']} "
+            f"scale={level['scale']:.8f}"
+        )
 
-    fallback = stitcher.neighbor_average_fallback(
-        tiles, graph, layout, all_failed, no_conn, sx, sy)
+    omitted_tile_ids = (
+        set(layout_data.get("all_failed_tile_ids", []))
+        if config.OMIT_ALL_FAILED_TILES_FROM_STITCH
+        else set()
+    )
 
-    omit = all_failed if config.OMIT_ALL_FAILED_TILES_FROM_STITCH else set()
+    if omitted_tile_ids:
+        log(f"Omitting all-failed tiles: {len(omitted_tile_ids)}")
+    else:
+        log("Omitting all-failed tiles: 0")
 
     log("\nWriting pyramidal OME-TIFF...")
     pyramid_info = stitcher.write_pyramidal_ome_tiff(
-        layout, config.PYRAMID_OME_TIFF_PATH, omitted_tile_ids=omit)
+        layout,
+        config.PYRAMID_OME_TIFF_PATH,
+        omitted_tile_ids=omitted_tile_ids,
+    )
 
-    layout_json = {
-        "dataset": config.DATASET_NAME,
-        "source_graph": str(config.GRAPH_PATH),
-        "source_transforms": str(config.TRANSFORMS_PATH),
-        "match_method": config.MATCH_METHOD,
-        "blend_mode": config.BLEND_MODE,
-        "used_statuses_for_layout": sorted(config.STITCH_USABLE_STATUSES),
-        "metadata_scale_x": sx, "metadata_scale_y": sy,
-        "pyramid_info": pyramid_info,
-        "all_failed_tile_ids": sorted(int(t) for t in all_failed),
-        "no_connection_tile_ids": sorted(int(t) for t in no_conn),
-        "all_failed_tile_neighbor_average_fallback": fallback,
-        "tiles": layout,
-    }
-    save_json(layout_json, config.STITCH_LAYOUT_PATH)
+    # Keep the globally refined layout, but update the pyramid metadata
+    # to exactly reflect what stage 7 wrote.
+    layout_data["pyramid_info"] = pyramid_info
+    layout_data["pyramid_info"]["pyramid_min_size"] = int(config.PYRAMID_MIN_SIZE)
+    layout_data["pyramid_info"]["tile_size"] = int(config.PYRAMID_TILE_SIZE)
+    layout_data["pyramid_info"]["compression"] = config.PYRAMID_COMPRESSION
+    layout_data["tiles"] = layout
+    layout_data["export_note"] = (
+        "OME-TIFF exported from globally refined stitch_layout.json."
+    )
+
+    save_json(layout_data, config.STITCH_LAYOUT_PATH)
 
     section("STITCH SUMMARY")
-    log(f"OME-TIFF:   {config.PYRAMID_OME_TIFF_PATH}")
-    log(f"Layout:     {config.STITCH_LAYOUT_PATH}")
-    log(f"Canvas:     {pyramid_info['full_width']} x "
+    log(f"OME-TIFF: {config.PYRAMID_OME_TIFF_PATH}")
+    log(f"Layout:   {config.STITCH_LAYOUT_PATH}")
+    log(
+        f"Canvas:   {pyramid_info['full_width']} x "
         f"{pyramid_info['full_height']}  |  "
         f"{len(pyramid_info['levels'])} pyramid level(s)  |  "
-        f"blend={config.BLEND_MODE}")
-    log("\nStage 7 complete.")
+        f"blend={config.BLEND_MODE}  |  "
+        f"compression={config.PYRAMID_COMPRESSION}"
+    )
 
 
 if __name__ == "__main__":
