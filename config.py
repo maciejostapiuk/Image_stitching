@@ -76,7 +76,7 @@ METRICS_JSON = OUTPUT_DIR / "metrics.json"
 METRICS_CSV = OUTPUT_DIR / "metrics.csv"
 
 DEBUG_DIR = OUTPUT_DIR / "debug_matches"
-STRIPS_DIR = OUTPUT_DIR / "border_strips"   # cut edge strips (stage 02)
+STRIPS_DIR = OUTPUT_DIR / "border_strips"  # cut edge strips (stage 02)
 
 STITCH_LAYOUT_PATH = OUTPUT_DIR / "stitch_layout.json"
 STITCHED_IMAGE_PATH = OUTPUT_DIR / "stitched_image.png"
@@ -102,8 +102,8 @@ TILE_REGEX = r"^(\d+)_(-?\d+)_(-?\d+)\.bmp$"
 EDGE_STRIP = 150
 
 # SIFT / RANSAC matching parameters
-RATIO_TEST = 0.75          # Lowe's ratio test threshold
-RANSAC_THRESHOLD = 3.0     # inlier distance threshold (pixels)
+RATIO_TEST = 0.75  # Lowe's ratio test threshold
+RANSAC_THRESHOLD = 3.0  # inlier distance threshold (pixels)
 MAX_MATCHES_TO_DRAW = 100  # cap on matches drawn in debug images
 
 # Connection classification thresholds (mirror the notebook)
@@ -124,7 +124,7 @@ VALID_MATCH_METHODS = {"sift", "roma", "hybrid"}
 
 # RoMa samples the whole strip uniformly, so many samples land off-overlap and
 # inlier_ratio is much lower than SIFT. These thresholds mirror the notebook.
-ROMA_SAMPLES = 2000           # points sampled from the dense warp
+ROMA_SAMPLES = 2000  # points sampled from the dense warp
 ROMA_GOOD_MIN_INLIERS = 15
 ROMA_GOOD_MIN_INLIER_RATIO = 0.1
 
@@ -132,7 +132,7 @@ ROMA_GOOD_MIN_INLIER_RATIO = 0.1
 # RoMa. These can be stricter than the plain-SIFT "good" thresholds, since the
 # whole point is to keep only the most trustworthy SIFT matches and let RoMa
 # handle the rest (low-texture / blank-background borders SIFT struggles with).
-HYBRID_SIFT_MIN_INLIERS = 20        # SIFT needs at least this many inliers...
+HYBRID_SIFT_MIN_INLIERS = 20  # SIFT needs at least this many inliers...
 HYBRID_SIFT_MIN_INLIER_RATIO = 0.6  # ...and at least this inlier ratio, else -> RoMa
 
 
@@ -140,13 +140,13 @@ HYBRID_SIFT_MIN_INLIER_RATIO = 0.6  # ...and at least this inlier ratio, else ->
 # Pyramidal OME-TIFF output (stage 7)
 # ---------------------------------------------------------------------------
 PYRAMID_OME_TIFF_PATH = OUTPUT_DIR / "stitched_pyramid.ome.tif"
-PYRAMID_TILE_SIZE = 512       # internal tile size of the OME-TIFF
-PYRAMID_MIN_SIZE = 1024       # stop building pyramid levels below this size
-PYRAMID_COMPRESSION = "deflate"   # "deflate" (lossless) or "jpeg" (smaller, lossy)
+PYRAMID_TILE_SIZE = 512  # internal tile size of the OME-TIFF
+PYRAMID_MIN_SIZE = 4096  # stop building pyramid levels below this size
+PYRAMID_COMPRESSION = "deflate"  # "deflate" (lossless) or "jpeg" (smaller, lossy)
 
 # Stitch placement / canvas controls (mirror Gustaf's cell)
-STITCH_USABLE_STATUSES = {"good"}     # statuses used for geometric placement
-MAX_STITCH_PIXELS = 250_000_000       # safety cap for the flat PNG; None = full res
+STITCH_USABLE_STATUSES = {"good"}  # statuses used for geometric placement
+MAX_STITCH_PIXELS = 250_000_000  # safety cap for the flat PNG; None = full res
 OMIT_ALL_FAILED_TILES_FROM_STITCH = False
 PLACE_ALL_FAILED_TILES_FROM_NEIGHBOR_AVERAGE = True
 NEIGHBOR_FALLBACK_MAX_ITERS = 8
@@ -185,6 +185,5 @@ OPPOSITE_EDGE = {
 def validate_dataset(dataset: str = DATASET_NAME) -> None:
     if dataset not in VALID_DATASETS:
         raise ValueError(
-            f"Unknown dataset: {dataset!r}. "
-            f"Choose one of: {sorted(VALID_DATASETS)}"
+            f"Unknown dataset: {dataset!r}. Choose one of: {sorted(VALID_DATASETS)}"
         )
