@@ -40,9 +40,6 @@ import config
 import common
 from common import log, section, save_json, load_json
 import os
-
-os.environ["CUDA_VISIBLE_DEVICES"] = ""
-
 import matchers
 
 

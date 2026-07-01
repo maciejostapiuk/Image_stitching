@@ -181,8 +181,7 @@ def _load_roma():
             "package (and ideally a CUDA GPU). See requirements-roma.txt for "
             "install steps, or use MATCH_METHOD=sift (CPU, no extra deps)."
         ) from e
-    # _roma_device = "cuda" if torch.cuda.is_available() else "cpu"
-    _roma_device = "cpu"
+    _roma_device = "cuda" if torch.cuda.is_available() else "cpu"
     common.log(f"[roma] loading RoMaV2 on {_roma_device}...")
     _roma_model = RoMaV2().to(_roma_device)
     return _roma_model, _roma_device

@@ -6,7 +6,7 @@
 #   1. CUDA-enabled PyTorch matched to your detected CUDA toolkit (or CPU build
 #      if no GPU / --cpu is given)
 #   2. the base pipeline requirements (numpy, opencv, scikit-image, tifffile, scipy)
-#   3. (optional) RoMaV2 for the roma/hybrid matchers
+#   3. RoMaV2 via uv pip for the roma/hybrid matchers
 #
 # Usage:
 #   ./setup.sh                 # auto-detect CUDA, install everything + RoMa
@@ -14,11 +14,6 @@
 #   ./setup.sh --cuda 121      # force a specific CUDA build (e.g. 12.1 -> 121)
 #   ./setup.sh --no-roma       # skip RoMaV2 (SIFT-only setup)
 #   ./setup.sh --venv .venv    # create/use a virtualenv at .venv first
-#
-# Notes:
-#   - Works on Linux and Windows (Git Bash / WSL). macOS has no CUDA: it falls
-#     back to the CPU/MPS torch build automatically.
-#   - Re-runnable: pip will skip already-satisfied packages.
 # =============================================================================
 
 set -euo pipefail
@@ -66,12 +61,8 @@ echo "[pip] upgrading pip..."
 $PIP install --upgrade pip >/dev/null
 
 # ---- detect CUDA version ----------------------------------------------------
-# Maps a detected CUDA toolkit version to a PyTorch wheel index tag.
-# PyTorch publishes builds for a limited set of CUDA versions; we snap to the
-# nearest supported one.
 detect_cuda_tag() {
   local raw=""
-  # Prefer nvcc, fall back to nvidia-smi's reported CUDA version.
   if command -v nvcc >/dev/null 2>&1; then
     raw="$(nvcc --version 2>/dev/null | grep -oE 'release [0-9]+\.[0-9]+' | grep -oE '[0-9]+\.[0-9]+' | head -1)"
   fi
@@ -88,11 +79,10 @@ detect_cuda_tag() {
   minor="${raw##*.}"
   num=$((major * 10 + minor))
 
-  # Snap to a PyTorch-supported CUDA wheel tag.
   if   (( num >= 124 )); then echo "cu124"
   elif (( num >= 121 )); then echo "cu121"
   elif (( num >= 118 )); then echo "cu118"
-  else                        echo "cu118"   # oldest commonly-supported
+  else                        echo "cu118"
   fi
 }
 
@@ -124,7 +114,6 @@ case "$CUDA_TAG" in
     $PIP install "torch>=2.0" --index-url https://download.pytorch.org/whl/cpu
     ;;
   default)
-    # macOS / let pip pick the platform default
     $PIP install "torch>=2.0"
     ;;
   cu*)
@@ -134,8 +123,6 @@ case "$CUDA_TAG" in
 esac
 
 # ---- install the rest of the base requirements ------------------------------
-# (torch is already handled above; install the others explicitly so we don't
-#  re-resolve torch from the default index.)
 echo "[deps] installing base pipeline requirements..."
 $PIP install \
   "numpy>=1.24" \
@@ -144,13 +131,33 @@ $PIP install \
   "tifffile>=2023.7" \
   "scipy>=1.10"
 
-# ---- optional: RoMaV2 -------------------------------------------------------
+# ---- optional: RoMaV2 via uv ------------------------------------------------
 if [[ "$INSTALL_ROMA" -eq 1 && "$CUDA_TAG" != "cpu" ]]; then
-  echo "[roma] installing RoMaV2 (for MATCH_METHOD=roma|hybrid)..."
-  $PIP install "git+https://github.com/Parskatt/RoMa.git" || {
+  echo "[roma] preparing RoMaV2 installation..."
+  
+  # Ensure uv is installed within the context of our python executable
+  echo "[roma] bootstrapping 'uv' package loader..."
+  $PIP install uv >/dev/null
+
+  ROMAV2_DIR="romav2"
+  
+  # Clean clone or update repository
+  if [[ ! -d "$ROMAV2_DIR" ]]; then
+    echo "[roma] Cloning RoMaV2 repository..."
+    git clone https://github.com/Parskatt/romav2 "$ROMAV2_DIR"
+  else
+    echo "[roma] RoMaV2 directory exists. Pulling latest updates..."
+    cd "$ROMAV2_DIR" && git pull && cd - >/dev/null
+  fi
+
+  echo "[roma] Installing RoMaV2 in editable mode using uv..."
+  # Calling uv through python guarantees it leverages our active virtual environment context
+  if $PYTHON -m uv pip install -e "$ROMAV2_DIR"; then
+    echo "[roma] RoMaV2 successfully installed!"
+  else
     echo "[roma] WARNING: RoMaV2 install failed. You can still use MATCH_METHOD=sift."
-    echo "[roma] See requirements-roma.txt for manual steps."
-  }
+    echo "[roma] Check the uv output log above for errors."
+  fi
 elif [[ "$INSTALL_ROMA" -eq 1 ]]; then
   echo "[roma] skipped (CPU-only setup). RoMa needs a GPU; use MATCH_METHOD=sift."
 fi
@@ -180,7 +187,7 @@ except Exception as e:
     print(f"  FAIL torch: {e}")
 
 try:
-    import romav2  # noqa
+    import romav2
     print("  ok   romav2 (roma/hybrid matchers available)")
 except Exception:
     print("  --   romav2 not installed (SIFT only; that's fine)")
