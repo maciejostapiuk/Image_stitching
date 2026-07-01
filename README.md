@@ -22,10 +22,10 @@ continue to work unchanged.
 # 1. Run the setup script to build your environment and install dependencies
 # (This automatically detects your CUDA runtime, sets up PyTorch, and configures RoMaV2)
 # See the setup.sh file for more usage info
-./setup.sh --venv .venv
+./setup.sh --venv venv
 
 # 1a. Activate the virtual environment
-source .venv/bin/activate
+source venv/bin/activate
 
 # (optional) for the RoMa / hybrid matchers on a GPU, also:
 #   - install a CUDA-matched torch build, then

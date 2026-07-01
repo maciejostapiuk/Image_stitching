@@ -13,7 +13,7 @@
 #   ./setup.sh --cpu           # force CPU-only torch (no GPU)
 #   ./setup.sh --cuda 121      # force a specific CUDA build (e.g. 12.1 -> 121)
 #   ./setup.sh --no-roma       # skip RoMaV2 (SIFT-only setup)
-#   ./setup.sh --venv .venv    # create/use a virtualenv at .venv first
+#   ./setup.sh --venv venv    # create/use a virtualenv at venv first
 # =============================================================================
 
 set -euo pipefail
@@ -31,7 +31,7 @@ while [[ $# -gt 0 ]]; do
     --cpu)      FORCE_CPU=1; shift ;;
     --cuda)     FORCE_CUDA="${2:-}"; shift 2 ;;
     --no-roma)  INSTALL_ROMA=0; shift ;;
-    --venv)     VENV_PATH="${2:-.venv}"; shift 2 ;;
+    --venv)     VENV_PATH="${2:-venv}"; shift 2 ;;
     --python)   PYTHON="${2}"; shift 2 ;;
     -h|--help)
       sed -n '2,30p' "$0"; exit 0 ;;
