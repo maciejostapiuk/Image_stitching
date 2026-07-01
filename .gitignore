@@ -1,4 +1,5 @@
 data/
 output/
-_pycache_
+_pycache_/
 romav2/
+venv/

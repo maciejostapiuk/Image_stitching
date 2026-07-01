@@ -19,8 +19,13 @@ continue to work unchanged.
 ## Quick start
 
 ```bash
-# 1. install dependencies (scripts also self-install what they need)
-pip install -r requirements.txt
+# 1. Run the setup script to build your environment and install dependencies
+# (This automatically detects your CUDA runtime, sets up PyTorch, and configures RoMaV2)
+# See the setup.sh file for more usage info
+./setup.sh --venv .venv
+
+# 1a. Activate the virtual environment
+source .venv/bin/activate
 
 # (optional) for the RoMa / hybrid matchers on a GPU, also:
 #   - install a CUDA-matched torch build, then
@@ -51,7 +56,7 @@ Local filesystem. The pipeline reads tiles from:
 <INPUT_ROOT>/<DATASET_NAME>/Images-FOV/<id>_<x>_<y>.bmp
 ```
 
-- `<id>`  — integer tile id
+- `<id>` — integer tile id
 - `<x>`,`<y>` — integer stage coordinates (may be negative)
 
 Example: `42_1000_2000.bmp` is tile 42 at stage position (1000, 2000).
@@ -66,16 +71,16 @@ Valid datasets: `cytology-small`, `cytology-large`, `histology-small`,
 All settings live in **`config.py`**. You can override the important ones via
 environment variables without editing the file:
 
-| Variable        | Meaning                              | Default                       |
-|-----------------|--------------------------------------|-------------------------------|
-| `DATASET_NAME`  | which dataset to process             | `cytology-small`              |
-| `INPUT_ROOT`    | root folder containing datasets      | `./data`                      |
-| `OUTPUT_DIR`    | where artifacts are written          | `./output`                    |
+| Variable       | Meaning                         | Default          |
+| -------------- | ------------------------------- | ---------------- |
+| `DATASET_NAME` | which dataset to process        | `cytology-small` |
+| `INPUT_ROOT`   | root folder containing datasets | `./data`         |
+| `OUTPUT_DIR`   | where artifacts are written     | `./output`       |
 
 Key algorithm parameters (in `config.py`):
 
 | Name               | Meaning                                            | Default |
-|--------------------|----------------------------------------------------|---------|
+| ------------------ | -------------------------------------------------- | ------- |
 | `EDGE_STRIP`       | width (px) of the border strip cut from each edge  | `150`   |
 | `RATIO_TEST`       | Lowe's ratio-test threshold for SIFT matches       | `0.75`  |
 | `RANSAC_THRESHOLD` | inlier distance threshold (px) for translation fit | `3.0`   |
@@ -117,24 +122,24 @@ matching stage simpler and lets you visually inspect every border.
 
 - **Reads:** `output/stitch_graph.json` + the tile images
 - **Writes:**
-  - `output/border_strips/<connection>__a_<edge>.png`
-  - `output/border_strips/<connection>__b_<edge>.png`
-  - `output/border_strips/strips_index.json`
+    - `output/border_strips/<connection>__a_<edge>.png`
+    - `output/border_strips/<connection>__b_<edge>.png`
+    - `output/border_strips/strips_index.json`
 
 `strips_index.json` maps each connection to its two strip files and records
 each strip's size, so later stages can load strips directly.
 
-### Stage 3 — `03_match.py`  *(switchable method)*
+### Stage 3 — `03_match.py` _(switchable method)_
 
 Computes the per-border translation `(dx, dy)` between adjacent tiles, plus an
 `inlier_ratio` quality score and a `good`/`suspicious`/`failed` status. **You
 choose the matching method:**
 
-| `MATCH_METHOD` | How it works                                              | Needs        |
-|----------------|-----------------------------------------------------------|--------------|
-| `sift` (default) | SIFT keypoints + Lowe ratio test + translation RANSAC   | CPU only     |
-| `roma`         | RoMaV2 dense neural matcher + translation RANSAC          | GPU + `romav2` |
-| `hybrid`       | SIFT first; fall back to RoMa where SIFT isn't confident  | GPU + `romav2` |
+| `MATCH_METHOD`   | How it works                                             | Needs          |
+| ---------------- | -------------------------------------------------------- | -------------- |
+| `sift` (default) | SIFT keypoints + Lowe ratio test + translation RANSAC    | CPU only       |
+| `roma`           | RoMaV2 dense neural matcher + translation RANSAC         | GPU + `romav2` |
+| `hybrid`         | SIFT first; fall back to RoMa where SIFT isn't confident | GPU + `romav2` |
 
 Both write the **identical schema**, so everything downstream is method-agnostic.
 
@@ -152,14 +157,14 @@ MATCH_METHOD=hybrid python scripts/03_match.py    # SIFT, RoMa fallback
 > (`ROMA_GOOD_MIN_INLIER_RATIO` in `config.py`).
 
 > **Hybrid** runs SIFT on every border and keeps its result only when it is
-> *confidently* good (`HYBRID_SIFT_MIN_INLIERS` inliers **and**
+> _confidently_ good (`HYBRID_SIFT_MIN_INLIERS` inliers **and**
 > `HYBRID_SIFT_MIN_INLIER_RATIO` ratio). Borders that don't clear that bar —
 > typically low-texture / blank backgrounds where SIFT struggles — fall back to
 > RoMa. You get SIFT's speed on easy borders and only pay the GPU cost on the
 > hard ones. Each result records which backend won (`method`) and why it fell
 > back (`hybrid_note`); the stage prints a per-backend breakdown.
 
-### Stage 7 — `07_stitch.py`  *(PNG + pyramidal OME-TIFF)*
+### Stage 7 — `07_stitch.py` _(PNG + pyramidal OME-TIFF)_
 
 Assembles the mosaic. Places `good` connections via metadata-scaled BFS, then
 fills all-failed tiles from their neighbors so no tile is dropped. Produces:
@@ -183,10 +188,10 @@ lossless / `jpeg` lossy).
 Where tiles overlap, `BLEND_MODE` controls how they're combined — in **both**
 the PNG and the pyramidal OME-TIFF:
 
-| `BLEND_MODE` | Behavior                                                       |
-|--------------|----------------------------------------------------------------|
-| `none`       | last tile wins (hard overwrite; fast, visible seams)           |
-| `average`    | mean of all tiles covering a pixel (removes seams, can be soft)|
+| `BLEND_MODE`        | Behavior                                                                                                  |
+| ------------------- | --------------------------------------------------------------------------------------------------------- |
+| `none`              | last tile wins (hard overwrite; fast, visible seams)                                                      |
+| `average`           | mean of all tiles covering a pixel (removes seams, can be soft)                                           |
 | `feather` (default) | distance-weighted blend — each tile fades out toward its edges so seams disappear smoothly (best quality) |
 
 ```bash
@@ -211,15 +216,15 @@ is recorded in `stitch_layout.json` (`stitch_info.blend_mode`).
 
 These names match the original notebooks so downstream code keeps working:
 
-| File                              | Produced by | Contents                                  |
-|-----------------------------------|-------------|-------------------------------------------|
-| `stitch_graph.json`               | stage 1     | the borders/neighbor graph                |
-| `border_strips/`                  | stage 2     | cut edge strips + `strips_index.json`     |
-| `transforms_translation.json`     | stage 3*    | per-border SIFT/RANSAC shifts             |
-| `metrics.json` / `metrics.csv`    | stage 4*    | NCC/SSIM/LPIPS per border                 |
-| `global_positions_<metric>.json`  | stage 5*    | spanning-tree global layout               |
-| `global_positions_optimized_*`    | stage 6*    | least-squares global layout + residuals   |
-| `stitched_pyramid.ome.tif`        | stage 7     | final mosaic (multi-resolution)           |
+| File                             | Produced by | Contents                                |
+| -------------------------------- | ----------- | --------------------------------------- |
+| `stitch_graph.json`              | stage 1     | the borders/neighbor graph              |
+| `border_strips/`                 | stage 2     | cut edge strips + `strips_index.json`   |
+| `transforms_translation.json`    | stage 3\*   | per-border SIFT/RANSAC shifts           |
+| `metrics.json` / `metrics.csv`   | stage 4\*   | NCC/SSIM/LPIPS per border               |
+| `global_positions_<metric>.json` | stage 5\*   | spanning-tree global layout             |
+| `global_positions_optimized_*`   | stage 6\*   | least-squares global layout + residuals |
+| `stitched_pyramid.ome.tif`       | stage 7     | final mosaic (multi-resolution)         |
 
 \* later stages, same ordered structure.
 
